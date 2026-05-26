@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: portfolio-api
+  threads:
+    virtual:
+      enabled: true
+
+  data:
+    mongodb:
+      uri: mongodb://root:password@localhost:27017/portfolio-db?authSource=admin
+
+server:
+  port: 8081
