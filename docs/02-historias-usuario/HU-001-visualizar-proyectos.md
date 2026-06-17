@@ -5,11 +5,11 @@
 **Para** conocer el trabajo del desarrollador
 
 **Criterios de aceptación:**
-- [ ] `GET /api/projects` devuelve lista de proyectos con `published: true`
-- [ ] Ordenados por el campo `order` ascendente
-- [ ] Cada item contiene: `slug`, `title`, `summary`, `thumbnail`, `tags`
-- [ ] Proyectos con `published: false` NO aparecen
-- [ ] Respuesta con status 200 OK
+- [x] `GET /api/projects` devuelve lista de proyectos con `published: true`
+- [x] Ordenados por el campo `order` ascendente
+- [x] Cada item contiene: `slug`, `title`, `summary`, `thumbnail`, `tags`
+- [x] Proyectos con `published: false` NO aparecen
+- [x] Respuesta con status 200 OK
 
 **Notas técnicas:**
 - Endpoint: `GET /api/projects`
