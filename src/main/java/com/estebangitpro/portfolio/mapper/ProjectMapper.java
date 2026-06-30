@@ -12,7 +12,7 @@ public interface ProjectMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
-    Project toProject(ProjectRequestDTO requestDTO);
 
-    ProjectResponseDTO toResponseDTO(Project project);
+    Project toProject(ProjectRequestDTO requestDTO);
+    ProjectResponseDTO toProjectResponseDTO(Project project);
 }

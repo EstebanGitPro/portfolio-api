@@ -1,6 +1,7 @@
 package com.estebangitpro.portfolio.dataloader;
 
 import com.estebangitpro.portfolio.model.Project;
+import com.estebangitpro.portfolio.model.ProjectStatus;
 import com.estebangitpro.portfolio.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -22,7 +23,7 @@ public class TestDataLoader implements CommandLineRunner {
                 .slug("mi-portfolio-web")
                 .summary("Sitio web personal con React y Spring Boot")
                 .description("Portfolio construido para mostrar mis proyectos como desarrollador")
-                .status("completed")
+                .status(ProjectStatus.COMPLETADO)
                 .tags(List.of("React", "Spring Boot", "MongoDB"))
                 .published(true)
                 .build();
