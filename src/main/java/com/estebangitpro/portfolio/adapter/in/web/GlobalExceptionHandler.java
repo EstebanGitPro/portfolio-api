@@ -1,6 +1,7 @@
 package com.estebangitpro.portfolio.adapter.in.web;
 
 import com.estebangitpro.portfolio.core.application.exception.ProjectNotFoundException;
+import com.estebangitpro.portfolio.core.domain.DuplicateProjectSlugException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleNotFound(ProjectNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateProjectSlugException.class)
+    public ResponseEntity<Map<String, String>> handleDuplicateSlug(DuplicateProjectSlugException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", ex.getMessage(), "slug", ex.getSlug()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

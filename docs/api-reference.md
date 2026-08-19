@@ -233,6 +233,18 @@ Delete a project by ID.
 }
 ```
 
+### 409 Conflict (Duplicate slug)
+
+Slugs are derived from the title and must be unique, so creating or updating a project
+with a title that yields an existing slug is rejected.
+
+```json
+{
+  "error": "A project already exists with slug: mi-portfolio-web",
+  "slug": "mi-portfolio-web"
+}
+```
+
 ### 500 Internal Server Error
 
 ```json

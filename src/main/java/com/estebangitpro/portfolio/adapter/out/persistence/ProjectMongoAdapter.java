@@ -1,8 +1,10 @@
 package com.estebangitpro.portfolio.adapter.out.persistence;
 
+import com.estebangitpro.portfolio.core.domain.DuplicateProjectSlugException;
 import com.estebangitpro.portfolio.core.domain.Project;
 import com.estebangitpro.portfolio.core.application.port.out.ProjectRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -39,8 +41,11 @@ public class ProjectMongoAdapter implements ProjectRepository {
     @Override
     public Project save(Project project) {
         ProjectMongoDocument doc = toDocument(project);
-        ProjectMongoDocument saved = mongoRepository.save(doc);
-        return toDomain(saved);
+        try {
+            return toDomain(mongoRepository.save(doc));
+        } catch (DuplicateKeyException ex) {
+            throw new DuplicateProjectSlugException(project.getSlug());
+        }
     }
 
     @Override
