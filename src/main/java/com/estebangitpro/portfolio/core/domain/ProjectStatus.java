@@ -1,7 +1,7 @@
-package com.estebangitpro.portfolio.model;
+package com.estebangitpro.portfolio.core.domain;
 
 /**
- * Estado del ciclo de vida del proyecto.
+ * Project lifecycle status.
  */
 public enum ProjectStatus {
     EN_DESARROLLO,

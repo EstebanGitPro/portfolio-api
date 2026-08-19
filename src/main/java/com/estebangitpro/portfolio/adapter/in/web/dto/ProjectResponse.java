@@ -1,15 +1,15 @@
-package com.estebangitpro.portfolio.dto;
+package com.estebangitpro.portfolio.adapter.in.web.dto;
 
-import com.estebangitpro.portfolio.model.ProjectLinks;
-import com.estebangitpro.portfolio.model.ProjectStatus;
-import com.estebangitpro.portfolio.model.StrategyItem;
-import com.estebangitpro.portfolio.model.TechStackItem;
+import com.estebangitpro.portfolio.core.domain.ProjectLinks;
+import com.estebangitpro.portfolio.core.domain.ProjectStatus;
+import com.estebangitpro.portfolio.core.domain.StrategyItem;
+import com.estebangitpro.portfolio.core.domain.TechStackItem;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record ProjectResponseDTO(
+public record ProjectResponse(
         String id,
         String slug,
         String title,
