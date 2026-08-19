@@ -25,13 +25,5 @@ services:
     depends_on:
       - mongodb
 
-  mongodbatlas:
-    image: mongodb/mongodb-atlas-local:latest
-    container_name: mongodbatlas
-    profiles:
-      - atlas
-    ports:
-      - "27018:27017"
-
 volumes:
   mongo_data:
