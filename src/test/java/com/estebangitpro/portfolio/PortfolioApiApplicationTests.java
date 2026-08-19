@@ -1,12 +1,13 @@
 package com.estebangitpro.portfolio;
 
+import com.estebangitpro.portfolio.support.MongoIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(properties = {
 		"spring.autoconfigure.exclude=org.springframework.ai.vectorstore.mongodb.autoconfigure.MongoDBAtlasVectorStoreAutoConfiguration"
 })
-class PortfolioApiApplicationTests {
+class PortfolioApiApplicationTests extends MongoIntegrationTest {
 
 	@Test
 	void contextLoads() {
