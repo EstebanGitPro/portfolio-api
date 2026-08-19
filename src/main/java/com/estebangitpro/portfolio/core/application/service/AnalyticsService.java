@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import java.util.Map;
 public class AnalyticsService implements AnalyticsTrackUseCase, AnalyticsQueryUseCase {
 
     private final AnalyticsRepository repository;
+    private final Clock clock;
     private final GeoResolver geoResolver;
     private final DeviceParser deviceParser;
 
@@ -41,7 +43,7 @@ public class AnalyticsService implements AnalyticsTrackUseCase, AnalyticsQueryUs
                 geoInfo.country(), geoInfo.region(), geoInfo.city(),
                 geoInfo.latitude(), geoInfo.longitude(), geoInfo.timezone(),
                 deviceInfo.deviceType(), deviceInfo.operatingSystem(), deviceInfo.browser(),
-                sessionId, LocalDateTime.now()
+                sessionId, LocalDateTime.now(clock)
         );
 
         repository.save(analytics);
@@ -49,7 +51,7 @@ public class AnalyticsService implements AnalyticsTrackUseCase, AnalyticsQueryUs
 
     @Override
     public AnalyticsSummary getDashboard() {
-        LocalDateTime end = LocalDateTime.now();
+        LocalDateTime end = LocalDateTime.now(clock);
         LocalDateTime start = end.minusDays(30);
 
         long totalViews = repository.countByCreatedAtBetween(start, end);
@@ -61,7 +63,7 @@ public class AnalyticsService implements AnalyticsTrackUseCase, AnalyticsQueryUs
 
     @Override
     public AnalyticsSummary getProjectStats(String slug) {
-        LocalDateTime end = LocalDateTime.now();
+        LocalDateTime end = LocalDateTime.now(clock);
         LocalDateTime start = end.minusDays(30);
 
         long totalViews = repository.countByProjectSlugAndCreatedAtBetween(slug, start, end);

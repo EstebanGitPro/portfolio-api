@@ -9,6 +9,7 @@ import com.estebangitpro.portfolio.core.application.exception.ProjectNotFoundExc
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -17,10 +18,12 @@ import java.util.List;
 public class ProjectService implements ProjectQueryUseCase, ProjectCommandUseCase {
 
     private final ProjectRepository repository;
+    private final Clock clock;
 
     @Override
     public Project createProject(ProjectDraft draft) {
-        return repository.save(fromDraft(null, generateSlug(draft.title()), draft, null, null));
+        LocalDateTime now = LocalDateTime.now(clock);
+        return repository.save(fromDraft(null, generateSlug(draft.title()), draft, now, now));
     }
 
     @Override
@@ -49,7 +52,7 @@ public class ProjectService implements ProjectQueryUseCase, ProjectCommandUseCas
                 generateSlug(draft.title()),
                 draft,
                 existing.getCreatedAt(),
-                existing.getUpdatedAt()));
+                LocalDateTime.now(clock)));
     }
 
     @Override
