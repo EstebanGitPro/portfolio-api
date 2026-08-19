@@ -77,7 +77,9 @@ class HexagonalArchitectureTest {
                     "javax..",
                     "org.mapstruct..",
                     "com.mongodb..",
-                    "org.bson..")
+                    "org.bson..",
+                    "io.swagger..",
+                    "org.springdoc..")
             .because("the domain must stay pure: no web, no persistence, no DI container");
 
     @ArchTest
