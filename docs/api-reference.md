@@ -196,7 +196,7 @@ Delete a project by ID.
 | title | String | Yes | Cannot be blank. Used to auto-generate slug |
 | summary | String | No | Short description |
 | description | String | No | Full description |
-| status | Enum | No | `EN_DESARROLLO`, `COMPLETADO`, `EN_PAUSA`, `ABANDONADO` |
+| status | Enum | No | `EN_DESARROLLO`, `EN_PRODUCCION`, `COMPLETADO`, `EN_PAUSA`, `ABANDONADO` |
 | tags | List\<String\> | No | Tech or category tags |
 | thumbnail | String | No | URL to thumbnail image |
 | coverImage | String | No | URL to cover image |
