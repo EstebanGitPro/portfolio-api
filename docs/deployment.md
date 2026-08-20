@@ -17,15 +17,15 @@ lookup in `IpGuideGeoResolver` needs.
 
 ## Configuration lives in mounted files, not in the environment
 
-Secrets are uploaded over SFTP to `/etc/portfolio` on the host and mounted read
+Secrets are uploaded over SFTP to `/home/deployer/projects/portfolio/config` on the host and mounted read
 only. Nothing sensitive appears in this repository, in the compose file, or in
 `docker inspect`.
 
 | File on the host | Mounted at | Carries |
 | --- | --- | --- |
-| `/etc/portfolio/application-prod.yaml` | `/app/config/application-prod.yaml` | MongoDB credentials, CORS origins |
-| `/etc/portfolio/mongo_root_username` | `/run/secrets/mongo_root_username` | The database user |
-| `/etc/portfolio/mongo_root_password` | `/run/secrets/mongo_root_password` | Its password |
+| `.../config/application-prod.yaml` | `/app/config/application-prod.yaml` | MongoDB credentials, CORS origins |
+| `.../config/mongo_root_username` | `/run/secrets/mongo_root_username` | The database user |
+| `.../config/mongo_root_password` | `/run/secrets/mongo_root_password` | Its password |
 
 Two mechanisms make this work, both verified against the real images:
 
@@ -42,8 +42,8 @@ first `$`.
 ### 1. Create the directory
 
 ```bash
-mkdir -p /etc/portfolio
-chmod 700 /etc/portfolio
+mkdir -p /home/deployer/projects/portfolio/config
+chmod 700 /home/deployer/projects/portfolio/config
 ```
 
 ### 2. Upload `application-prod.yaml`
@@ -72,9 +72,9 @@ Each file holds the value and nothing else — **no trailing newline**, which is
 `printf` is used instead of `echo`:
 
 ```bash
-printf 'portfolio' > /etc/portfolio/mongo_root_username
-openssl rand -base64 32 | tr -d '\n' > /etc/portfolio/mongo_root_password
-chmod 600 /etc/portfolio/mongo_root_*
+printf 'portfolio' > /home/deployer/projects/portfolio/config/mongo_root_username
+openssl rand -base64 32 | tr -d '\n' > /home/deployer/projects/portfolio/config/mongo_root_password
+chmod 600 /home/deployer/projects/portfolio/config/mongo_root_*
 ```
 
 The password in `application-prod.yaml` must match `mongo_root_password` exactly.
@@ -91,17 +91,15 @@ user, one for the client that logs in.
 3. **Deploy.** The first build compiles with Maven inside the image, so it takes a
    few minutes.
 
-The `deploy.labels` block on `portfolio-api` in `docker-compose.prod.yaml` is a
-placeholder. Before the first deploy, replace it with the label set Dokploy
-already generates for the applications running on this host, so the entrypoint and
-certificate resolver names match what its Traefik actually expects:
+There are no Traefik labels in the compose file, and that is deliberate. The
+applications already running on this host carry `"Labels": {}` — Dokploy does not
+route through swarm labels, it writes its own dynamic configuration for Traefik.
+Hand-written labels would be inert. The domain is attached in the Dokploy UI and
+Dokploy takes care of the rest.
 
-```bash
-docker service inspect apialertax-backend-ocouav \
-  --format '{{json .Spec.Labels}}' | python3 -m json.tool
-```
-
-Copying a label set that already works beats inventing one and debugging Traefik.
+The bind mounts follow the convention this host already uses: the Alertax backend
+mounts `/home/deployer/projects/alertax-backend/config/prod-config.json` into
+`/app/config/`, and this stack does the same under its own project directory.
 
 ## Cloudflare
 
@@ -144,8 +142,8 @@ The data lives in the `mongo_data` volume; nothing else in the stack holds state
 ```bash
 MONGO_CONTAINER=$(docker ps -qf name=portfolio-mongodb)
 docker exec $MONGO_CONTAINER mongodump \
-  --username "$(cat /etc/portfolio/mongo_root_username)" \
-  --password "$(cat /etc/portfolio/mongo_root_password)" \
+  --username "$(cat /home/deployer/projects/portfolio/config/mongo_root_username)" \
+  --password "$(cat /home/deployer/projects/portfolio/config/mongo_root_password)" \
   --authenticationDatabase admin --archive=/tmp/dump.gz --gzip
 docker cp $MONGO_CONTAINER:/tmp/dump.gz ./portfolio-$(date +%F).gz
 ```

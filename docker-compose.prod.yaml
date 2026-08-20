@@ -7,7 +7,8 @@
 # Configuration arrives as mounted files rather than environment variables, so
 # secrets can be uploaded over SFTP and never appear in a compose file, in
 # `docker inspect`, or in this repository. Upload them to /etc/portfolio on the
-# host before the first deploy — see docs/deployment.md.
+# host before the first deploy, under the same /home/deployer/projects path the
+# other applications already use — see docs/deployment.md.
 
 name: portfolio
 
@@ -21,8 +22,8 @@ services:
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
     volumes:
-      - /etc/portfolio/mongo_root_username:/run/secrets/mongo_root_username:ro
-      - /etc/portfolio/mongo_root_password:/run/secrets/mongo_root_password:ro
+      - /home/deployer/projects/portfolio/config/mongo_root_username:/run/secrets/mongo_root_username:ro
+      - /home/deployer/projects/portfolio/config/mongo_root_password:/run/secrets/mongo_root_password:ro
       - mongo_data:/data/db
     networks:
       - backend
@@ -52,7 +53,7 @@ services:
       # Spring reads ./config/ from the working directory with higher precedence
       # than anything packaged in the jar, so this file carries the credentials
       # and the CORS origins without a single secret living in the image.
-      - /etc/portfolio/application-prod.yaml:/app/config/application-prod.yaml:ro
+      - /home/deployer/projects/portfolio/config/application-prod.yaml:/app/config/application-prod.yaml:ro
     depends_on:
       mongodb:
         condition: service_healthy
@@ -72,11 +73,6 @@ services:
           # databases of three other applications is somebody else's outage.
           # -XX:MaxRAMPercentage=75 in the image sizes the heap against this.
           memory: 768m
-      labels:
-        # PLACEHOLDER — to be replaced with the label set Dokploy already uses
-        # for the applications running on this host, so the certificate resolver
-        # and entrypoint names match what its Traefik actually expects.
-        - "traefik.enable=true"
     logging: *logging
 
 networks:
