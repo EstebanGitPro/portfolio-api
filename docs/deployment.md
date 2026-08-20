@@ -66,6 +66,12 @@ app:
     allowed-origins: https://<front-domain>
 ```
 
+The API runs as a non-root user, so this file must be readable by it:
+
+```bash
+chmod 644 /home/deployer/projects/portfolio/config/application-prod.yaml
+```
+
 ### 3. Upload the two credential files
 
 Each file holds the value and nothing else — **no trailing newline**, which is why
@@ -74,8 +80,25 @@ Each file holds the value and nothing else — **no trailing newline**, which is
 ```bash
 printf 'portfolio' > /home/deployer/projects/portfolio/config/mongo_root_username
 openssl rand -base64 32 | tr -d '\n' > /home/deployer/projects/portfolio/config/mongo_root_password
-chmod 600 /home/deployer/projects/portfolio/config/mongo_root_*
+chmod 644 /home/deployer/projects/portfolio/config/mongo_root_*
+chmod 700 /home/deployer/projects/portfolio/config
 ```
+
+### Why the files are 644 and the directory is 700
+
+Neither container runs as root. MongoDB's entrypoint drops to the `mongodb` user
+before it reads the `_FILE` paths, and the API runs as `spring` (uid 1001). A file
+mode of `600` owned by root is unreadable to both, and the failure is not subtle:
+
+```
+docker-entrypoint.sh: line 83: /run/secrets/mongo_root_username: Permission denied
+```
+
+The protection comes from the directory instead. `700` on
+`/home/deployer/projects/portfolio/config` means no other user on the host can even
+traverse into it, while `644` on the files themselves keeps them readable inside the
+containers — Docker resolves the bind mount as root and hands the file to the
+container directly, so the directory mode never enters that path.
 
 The password in `application-prod.yaml` must match `mongo_root_password` exactly.
 They are two views of the same credential: one for the database that creates the
