@@ -5,6 +5,7 @@ import com.estebangitpro.portfolio.core.application.port.in.ProjectDraft;
 import com.estebangitpro.portfolio.adapter.in.web.dto.ProjectRequest;
 import com.estebangitpro.portfolio.adapter.in.web.dto.ProjectResponse;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 /**
  * Translates between the HTTP payloads and the domain. Used by the web adapter only —
@@ -13,6 +14,8 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface ProjectMapper {
 
+    @Mapping(target = "order", source = "order", defaultValue = "0")
+    @Mapping(target = "published", source = "published", defaultValue = "false")
     ProjectDraft toDraft(ProjectRequest requestDTO);
 
     ProjectResponse toResponse(Project project);
