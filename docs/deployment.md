@@ -101,16 +101,95 @@ The bind mounts follow the convention this host already uses: the Alertax backen
 mounts `/home/deployer/projects/alertax-backend/config/prod-config.json` into
 `/app/config/`, and this stack does the same under its own project directory.
 
+## How Traefik reaches the API
+
+Dokploy writes one file per application into `/etc/dokploy/traefik/dynamic/`, and
+Traefik picks it up through its file provider. Nothing is expressed as a container
+label. Creating the application in the Dokploy UI is what generates the file, so
+the shape below is not something to write by hand — it is what the result should
+look like, copied from the Alertax backend which already works on this host:
+
+```yaml
+http:
+  routers:
+    <app>-router-N:
+      rule: Host(`eportfolioapi.rbsuport.com`)
+      service: <app>-service-N
+      middlewares:
+        - redirect-to-https
+      entryPoints:
+        - web
+    <app>-router-websecure-N:
+      rule: Host(`eportfolioapi.rbsuport.com`)
+      service: <app>-service-N
+      middlewares: []
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+  services:
+    <app>-service-N:
+      loadBalancer:
+        servers:
+          - url: http://<container>:8086
+        passHostHeader: true
+```
+
+Two entry points, `web` and `websecure`; the plain one redirects to HTTPS through
+the shared `redirect-to-https` middleware; the secure one asks the `letsencrypt`
+resolver for its certificate. In the UI this means one thing only: attach
+`eportfolioapi.rbsuport.com` to service `portfolio-api` on port `8086` with HTTPS
+enabled. After deploying, confirm the generated file matches:
+
+```bash
+ls /etc/dokploy/traefik/dynamic/
+cat /etc/dokploy/traefik/dynamic/portfolio-*.yml
+```
+
 ## Cloudflare
 
-The domain resolves to Cloudflare, not straight to the VPS. Two consequences:
+The DNS is already in place. `eportfolioapi.rbsuport.com` resolves to the same two
+Cloudflare addresses as `alertax-api.rbsuport.com`, which serves traffic today, so
+the record needs no change.
 
-- The certificate has to be negotiated through the proxy. If issuance stalls, set
-  the record to DNS-only (grey cloud) until the certificate exists, then turn the
-  proxy back on — or issue a Cloudflare Origin Certificate and let Traefik serve
-  that instead of asking Let's Encrypt.
-- SSL mode must be **Full (strict)**. *Flexible* would leave the leg between
-  Cloudflare and the VPS unencrypted while the browser shows a padlock.
+The certificate a browser sees on that host is issued by Google Trust Services for
+`CN=rbsuport.com` — Cloudflare's own, not the Let's Encrypt one Traefik holds.
+Cloudflare terminates TLS for visitors and talks to the VPS behind it. Since an
+application on this exact path already works with `certResolver: letsencrypt`,
+copying that configuration is the safe move: the combination is proven here, and
+this is not the place to invent a different one.
+
+## Protecting the admin surface
+
+There is no authentication in the application, and the Traefik on this host has
+exactly one middleware defined — `redirect-to-https`. No `basicAuth` exists yet.
+
+Traefik can add one. Define the middleware in its own file so that redeploying the
+application, which regenerates the file Dokploy owns, cannot erase it:
+
+```yaml
+# /etc/dokploy/traefik/dynamic/portfolio-auth.yml
+http:
+  middlewares:
+    portfolio-admin-auth:
+      basicAuth:
+        users:
+          - "esteban:$2y$05$..."
+```
+
+Generate the entry with bcrypt:
+
+```bash
+docker run --rm httpd:alpine htpasswd -nbB esteban 'the-password'
+```
+
+Then reference `portfolio-admin-auth` from the `websecure` router, which is the
+part Dokploy regenerates — check after every redeploy that it survived, or set it
+through Dokploy's own Traefik configuration editor so it is stored with the app.
+
+This still lives in the proxy rather than in the code. It is the difference between
+an open write surface and a closed one, but it is not an identity: the application
+still cannot tell who is calling, and nothing is audited.
 
 ## Verify
 
@@ -150,13 +229,12 @@ docker cp $MONGO_CONTAINER:/tmp/dump.gz ./portfolio-$(date +%F).gz
 
 Worth a cron job next to the Alertax backups that already run on this host.
 
-## The open question: authentication
+## What the application still does not do
 
-The application has **no authentication of its own**. `/api/admin/*` creates, edits
-and deletes projects, and nothing in the code checks who is calling.
+`/api/admin/*` has no notion of who is calling. Update and delete are not exposed
+at all — they were removed for exactly this reason — but creating a project is open
+to anyone who reaches the endpoint, and nothing is audited.
 
-With Caddy that gap was covered by HTTP Basic at the edge. Under Dokploy it is not
-covered at all unless the equivalent is configured in Traefik. On a host shared
-with three other production systems, this is the first thing to close: Spring
-Security with a single admin user, or an API key filter, moves the boundary into
-the application where it belongs.
+The middleware above closes the door. Spring Security, or an API key filter, would
+put the lock in the application where it belongs, and would let update and delete
+come back.
