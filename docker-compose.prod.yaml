@@ -1,25 +1,28 @@
-# Production stack for a single VPS: Caddy on the edge, the API behind it and
-# MongoDB reachable by nobody but the API.
+# Production stack for the VPS, deployed through Dokploy.
 #
-#   docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d --build
+# Dokploy owns Traefik and, with it, ports 80 and 443. Nothing here publishes a
+# port: Traefik reaches the API over the dokploy-network overlay and terminates
+# TLS itself, the same way the other applications on that host already work.
 #
-# Local development still uses docker-compose.yaml, which stays as it is.
+# Configuration arrives as mounted files rather than environment variables, so
+# secrets can be uploaded over SFTP and never appear in a compose file, in
+# `docker inspect`, or in this repository. Upload them to /etc/portfolio on the
+# host before the first deploy — see docs/deployment.md.
 
-name: portfolio-prod
+name: portfolio
 
-# No container_name anywhere: compose derives the names from the project, so this
-# stack can run next to the development one without fighting over them.
 services:
   mongodb:
     image: mongo:7.0.4
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:?define MONGO_USERNAME in .env.prod}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?define MONGO_PASSWORD in .env.prod}
-    # No published ports on purpose: on a VPS, "ports:" would expose the database
-    # to the whole internet because Docker writes its own iptables rules and walks
-    # straight past ufw.
+      # The mongo image reads these two from files when the _FILE suffix is used,
+      # so the credentials themselves stay out of the container's environment.
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
     volumes:
+      - /etc/portfolio/mongo_root_username:/run/secrets/mongo_root_username:ro
+      - /etc/portfolio/mongo_root_password:/run/secrets/mongo_root_password:ro
       - mongo_data:/data/db
     networks:
       - backend
@@ -29,6 +32,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     logging: &logging
       driver: json-file
       options:
@@ -41,59 +48,45 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      MONGO_HOST: mongodb
-      MONGO_PORT: 27017
-      MONGO_DATABASE: ${MONGO_DATABASE:-portfolio-db}
-      MONGO_USERNAME: ${MONGO_USERNAME:?define MONGO_USERNAME in .env.prod}
-      MONGO_PASSWORD: ${MONGO_PASSWORD:?define MONGO_PASSWORD in .env.prod}
-      MONGO_AUTH_DB: admin
-      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:?define APP_CORS_ALLOWED_ORIGINS in .env.prod}
-      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
-      SWAGGER_UI_ENABLED: ${SWAGGER_UI_ENABLED:-false}
-    # Also no published ports: the only way in is through Caddy.
+    volumes:
+      # Spring reads ./config/ from the working directory with higher precedence
+      # than anything packaged in the jar, so this file carries the credentials
+      # and the CORS origins without a single secret living in the image.
+      - /etc/portfolio/application-prod.yaml:/app/config/application-prod.yaml:ro
     depends_on:
       mongodb:
         condition: service_healthy
     networks:
       - backend
-      - edge
+      - dokploy-network
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8086/actuator/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 60s
-    logging: *logging
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      API_DOMAIN: ${API_DOMAIN:?define API_DOMAIN in .env.prod}
-      ADMIN_USER: ${ADMIN_USER:?define ADMIN_USER in .env.prod}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?run "docker run --rm caddy:2-alpine caddy hash-password --plaintext <password>"}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - portfolio-api
-    networks:
-      - edge
+    deploy:
+      resources:
+        limits:
+          # The host runs without swap, so an unbounded JVM competing with the
+          # databases of three other applications is somebody else's outage.
+          # -XX:MaxRAMPercentage=75 in the image sizes the heap against this.
+          memory: 768m
+      labels:
+        # PLACEHOLDER — to be replaced with the label set Dokploy already uses
+        # for the applications running on this host, so the certificate resolver
+        # and entrypoint names match what its Traefik actually expects.
+        - "traefik.enable=true"
     logging: *logging
 
 networks:
-  # internal: no route to the internet and no route from it. MongoDB lives here
-  # alone with the API; the API reaches the outside through the edge network.
+  # MongoDB lives here alone with the API: internal means no route to the
+  # internet and none from it.
   backend:
     internal: true
-  edge:
+  # Created and owned by Dokploy. Traefik routes to the API across it.
+  dokploy-network:
+    external: true
 
 volumes:
   mongo_data:
-  caddy_data:
-  caddy_config:

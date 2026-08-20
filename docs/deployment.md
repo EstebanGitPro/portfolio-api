@@ -1,186 +1,164 @@
-# Deployment — VPS with Docker Compose
+# Deployment — VPS with Dokploy
 
-The production stack is three containers on one host:
-
-```
-internet ──► caddy (80/443)  ──►  portfolio-api (8086)  ──►  mongodb (27017)
-             TLS + basic auth     no published ports        no published ports
-                  edge network         edge + backend            backend only
-```
-
-Only Caddy publishes ports. The API and MongoDB are reachable through the compose
-networks and nowhere else, and `backend` is declared `internal`, so the database has no
-route to the internet at all.
-
-Files involved:
-
-| File | Role |
-| --- | --- |
-| `docker-compose.prod.yaml` | The production stack |
-| `Caddyfile` | Reverse proxy, TLS, HTTP Basic on the admin surface |
-| `src/main/resources/application-prod.yaml` | The `prod` Spring profile |
-| `.env.prod` | Secrets and the domain — **never committed** |
-| `docker-compose.yaml` | Local development, unchanged |
-
-## 1. DNS first
-
-Point an A record at the VPS **before** starting anything:
+The host already runs Alertax, FlightHours and MotoGo. Dokploy administers it and
+Traefik holds ports 80 and 443, so this stack neither publishes ports nor brings a
+reverse proxy of its own: Traefik reaches the API across the `dokploy-network`
+overlay and terminates TLS the same way it already does for the other apps.
 
 ```
-eportfolioapi.rbsuport.com.   A   <VPS_IP>
+internet ─► cloudflare ─► traefik (dokploy) ─► portfolio-api ─► mongodb
+                                 :80 :443       no ports         no ports
+                                              dokploy-network    backend only
 ```
 
-Caddy asks Let's Encrypt for the certificate the first time it boots. If the name does
-not resolve to this machine yet, the request fails and it backs off — verify with
-`dig +short eportfolioapi.rbsuport.com` before continuing.
+`backend` is declared `internal`, so MongoDB has no route to the internet and none
+from it. The API keeps its own egress through `dokploy-network`, which the geo
+lookup in `IpGuideGeoResolver` needs.
 
-## 2. Firewall
+## Configuration lives in mounted files, not in the environment
+
+Secrets are uploaded over SFTP to `/etc/portfolio` on the host and mounted read
+only. Nothing sensitive appears in this repository, in the compose file, or in
+`docker inspect`.
+
+| File on the host | Mounted at | Carries |
+| --- | --- | --- |
+| `/etc/portfolio/application-prod.yaml` | `/app/config/application-prod.yaml` | MongoDB credentials, CORS origins |
+| `/etc/portfolio/mongo_root_username` | `/run/secrets/mongo_root_username` | The database user |
+| `/etc/portfolio/mongo_root_password` | `/run/secrets/mongo_root_password` | Its password |
+
+Two mechanisms make this work, both verified against the real images:
+
+- The `mongo` image reads `MONGO_INITDB_ROOT_USERNAME_FILE` and
+  `MONGO_INITDB_ROOT_PASSWORD_FILE` and takes the credentials from those paths.
+- Spring Boot reads `./config/` relative to the working directory — `/app` in this
+  image — with higher precedence than anything packaged inside the jar. A mounted
+  `application-prod.yaml` overrides the packaged one property by property.
+
+A side benefit: a bcrypt hash or a password containing `$` survives intact. Passed
+through compose as an environment variable it would be silently truncated at the
+first `$`.
+
+### 1. Create the directory
 
 ```bash
-sudo ufw allow 22/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
+mkdir -p /etc/portfolio
+chmod 700 /etc/portfolio
 ```
 
-A warning worth keeping in mind: Docker writes its own iptables rules and bypasses ufw.
-A container that publishes a port is exposed even when ufw says the port is closed. That
-is exactly why `mongodb` and `portfolio-api` publish nothing in this stack — closing the
-port in ufw would not have been enough.
+### 2. Upload `application-prod.yaml`
 
-## 3. Install Docker and clone
+```yaml
+spring:
+  data:
+    mongodb:
+      host: mongodb
+      port: 27017
+      database: portfolio-db
+      username: portfolio
+      password: <the same password as the file below>
+      authentication-database: admin
+
+app:
+  cors:
+    # The front end origins, comma separated. No wildcard: the API sends
+    # credentials, and "*" would let any site on the internet call it.
+    allowed-origins: https://<front-domain>
+```
+
+### 3. Upload the two credential files
+
+Each file holds the value and nothing else — **no trailing newline**, which is why
+`printf` is used instead of `echo`:
 
 ```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER   # log out and back in
-
-git clone https://github.com/EstebanGitPro/portfolio-api.git
-cd portfolio-api
+printf 'portfolio' > /etc/portfolio/mongo_root_username
+openssl rand -base64 32 | tr -d '\n' > /etc/portfolio/mongo_root_password
+chmod 600 /etc/portfolio/mongo_root_*
 ```
 
-## 4. Write `.env.prod`
+The password in `application-prod.yaml` must match `mongo_root_password` exactly.
+They are two views of the same credential: one for the database that creates the
+user, one for the client that logs in.
 
-Create it on the server, next to `docker-compose.prod.yaml`. It is gitignored:
+## Deploying through Dokploy
+
+1. **Create a Compose application** pointing at
+   `github.com/EstebanGitPro/portfolio-api`, branch `feature/hu-001` (or `main`
+   once merged), with compose path `docker-compose.prod.yaml`.
+2. **Attach the domain** `eportfolioapi.rbsuport.com` to service `portfolio-api`
+   on port `8086`, and let Dokploy handle the certificate.
+3. **Deploy.** The first build compiles with Maven inside the image, so it takes a
+   few minutes.
+
+The `deploy.labels` block on `portfolio-api` in `docker-compose.prod.yaml` is a
+placeholder. Before the first deploy, replace it with the label set Dokploy
+already generates for the applications running on this host, so the entrypoint and
+certificate resolver names match what its Traefik actually expects:
 
 ```bash
-# Domain already pointing at this VPS
-API_DOMAIN=eportfolioapi.rbsuport.com
-
-# MongoDB. Generate the password, do not invent one: openssl rand -base64 32
-MONGO_USERNAME=portfolio
-MONGO_PASSWORD=<generated>
-MONGO_DATABASE=portfolio-db
-
-# HTTP Basic for /api/admin/* and the docs, enforced by Caddy.
-# Hash it: docker run --rm caddy:2-alpine caddy hash-password --plaintext '<password>'
-ADMIN_USER=esteban
-ADMIN_PASSWORD_HASH=<hash, with every $ doubled — see below>
-
-# Browser origins allowed to call the API. Comma separated, no wildcard.
-APP_CORS_ALLOWED_ORIGINS=https://rbsuport.com,https://www.rbsuport.com
-
-# Docs are off by default: they publish the shape of every endpoint.
-API_DOCS_ENABLED=false
-SWAGGER_UI_ENABLED=false
-
-IMAGE_TAG=latest
+docker service inspect apialertax-backend-ocouav \
+  --format '{{json .Spec.Labels}}' | python3 -m json.tool
 ```
+
+Copying a label set that already works beats inventing one and debugging Traefik.
+
+## Cloudflare
+
+The domain resolves to Cloudflare, not straight to the VPS. Two consequences:
+
+- The certificate has to be negotiated through the proxy. If issuance stalls, set
+  the record to DNS-only (grey cloud) until the certificate exists, then turn the
+  proxy back on — or issue a Cloudflare Origin Certificate and let Traefik serve
+  that instead of asking Let's Encrypt.
+- SSL mode must be **Full (strict)**. *Flexible* would leave the leg between
+  Cloudflare and the VPS unencrypted while the browser shows a padlock.
+
+## Verify
 
 ```bash
-chmod 600 .env.prod
-```
-
-### The `$` trap in the bcrypt hash
-
-`caddy hash-password` returns something like `$2a$14$Ku3s...`. Docker Compose reads `$`
-as the start of a variable, so pasted as-is the hash silently arrives at Caddy truncated
-to `$2a$14` and every login fails with no useful error.
-
-**Double every `$`** when writing it into `.env.prod`:
-
-```
-# what caddy printed:   $2a$14$Ku3sIjK9...
-ADMIN_PASSWORD_HASH=$$2a$$14$$Ku3sIjK9...
-```
-
-Verify what actually reaches the container before trusting it:
-
-```bash
-docker compose -f docker-compose.prod.yaml --env-file .env.prod \
-  run --rm --no-deps --entrypoint sh caddy -c 'echo $ADMIN_PASSWORD_HASH'
-```
-
-It must print the hash with single `$` and the full string intact.
-
-Every one of these variables is mandatory except the ones with a default. The compose
-file fails fast with a readable message if one is missing, instead of booting a stack
-with an empty database password.
-
-## 5. Up
-
-```bash
-docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d --build
-```
-
-First boot takes a few minutes: Maven builds inside the image and Caddy negotiates the
-certificate.
-
-## 6. Verify
-
-```bash
-curl -fsS https://eportfolioapi.rbsuport.com/api/projects            # 200, public
+curl -fsS https://eportfolioapi.rbsuport.com/api/projects        # 200, public
 curl -o /dev/null -w '%{http_code}\n' \
-     https://eportfolioapi.rbsuport.com/api/admin/projects           # 401, protected
-curl -u esteban:<password> \
-     https://eportfolioapi.rbsuport.com/api/admin/projects           # 200
-curl -o /dev/null -w '%{http_code}\n' \
-     https://eportfolioapi.rbsuport.com/actuator/health              # 404, not public
+     https://eportfolioapi.rbsuport.com/actuator/health          # 404, not public
 ```
 
-Health from the host, where the actuator is still reachable:
+From the host, where the actuator is still reachable:
 
 ```bash
-docker compose -f docker-compose.prod.yaml ps
-docker compose -f docker-compose.prod.yaml exec portfolio-api \
+docker exec $(docker ps -qf name=portfolio-api) \
   curl -fsS http://localhost:8086/actuator/health
 ```
 
-## 7. Deploying a new version
+## Memory
 
-```bash
-git pull
-docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d --build
-```
-
-Compose recreates only what changed. `restart: unless-stopped` brings everything back
-after a reboot of the VPS.
+The host runs **without swap**. When memory runs out the kernel picks a victim,
+and it does not have to be this container — it can be a MySQL belonging to another
+application. Both services therefore declare limits: 768m for the API, 1g for
+MongoDB. The image sizes its heap with `-XX:MaxRAMPercentage=75.0`, which only
+means something because that limit exists.
 
 ## Backups
 
-The data lives in the `mongo_data` volume. Nothing else in the stack holds state:
+The data lives in the `mongo_data` volume; nothing else in the stack holds state.
 
 ```bash
-COMPOSE="docker compose -f docker-compose.prod.yaml --env-file .env.prod"
-
-$COMPOSE exec mongodb mongodump \
-  --username "$MONGO_USERNAME" --password "$MONGO_PASSWORD" \
+MONGO_CONTAINER=$(docker ps -qf name=portfolio-mongodb)
+docker exec $MONGO_CONTAINER mongodump \
+  --username "$(cat /etc/portfolio/mongo_root_username)" \
+  --password "$(cat /etc/portfolio/mongo_root_password)" \
   --authenticationDatabase admin --archive=/tmp/dump.gz --gzip
-$COMPOSE cp mongodb:/tmp/dump.gz ./backup-$(date +%F).gz
+docker cp $MONGO_CONTAINER:/tmp/dump.gz ./portfolio-$(date +%F).gz
 ```
 
-Worth a cron job once the site carries real content.
+Worth a cron job next to the Alertax backups that already run on this host.
 
 ## The open question: authentication
 
-The application has **no authentication of its own**. `/api/admin/*` creates, edits and
-deletes projects, and today the only thing guarding it is the HTTP Basic that Caddy
-applies at the edge. That is real protection — the request never reaches the app without
-credentials — but it lives in the proxy, not in the code:
+The application has **no authentication of its own**. `/api/admin/*` creates, edits
+and deletes projects, and nothing in the code checks who is calling.
 
-- anything that reaches the API container directly skips it;
-- there is no notion of a user, so there is nothing to audit;
-- moving to another proxy or another host means re-implementing the check there.
-
-Spring Security with a single admin user, or an API key filter, would move that boundary
-into the application where it belongs. Until then, treat the Caddy credentials as the
-only thing between the internet and the project catalogue.
+With Caddy that gap was covered by HTTP Basic at the edge. Under Dokploy it is not
+covered at all unless the equivalent is configured in Traefik. On a host shared
+with three other production systems, this is the first thing to close: Spring
+Security with a single admin user, or an API key filter, moves the boundary into
+the application where it belongs.

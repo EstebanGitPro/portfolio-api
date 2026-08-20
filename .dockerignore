@@ -19,6 +19,5 @@ portfolio_esteban/
 
 # Deployment files, read by the host and not by the build
 docker-compose*.yaml
-Caddyfile
 docs/
 HELP.md
