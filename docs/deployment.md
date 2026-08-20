@@ -171,6 +171,24 @@ cat /etc/dokploy/traefik/dynamic/portfolio-*.yml
 
 ## Cloudflare
 
+**Check where the record actually points before debugging anything else.** The API
+answered 404 for hours because the `eportfolioapi` A record pointed at a different
+server, which also runs Traefik and therefore returned the byte-identical
+`404 page not found`. The wrong machine was producing the right-looking error.
+
+The fastest way to tell the two apart is to bypass the proxy and ask the origin
+directly:
+
+```bash
+curl -sk -H 'Host: eportfolioapi.rbsuport.com' https://161.97.142.2/api/projects
+```
+
+A 200 here against a 404 in the browser means DNS is pointing somewhere else. It is
+also worth knowing that Traefik's own 404 is `text/plain` with the body
+`404 page not found`, while an application's 404 carries its own content type —
+comparing against a host known to work says immediately whether a route exists.
+
+
 The DNS is already in place. `eportfolioapi.rbsuport.com` resolves to the same two
 Cloudflare addresses as `alertax-api.rbsuport.com`, which serves traffic today, so
 the record needs no change.
@@ -219,8 +237,15 @@ still cannot tell who is calling, and nothing is audited.
 ```bash
 curl -fsS https://eportfolioapi.rbsuport.com/api/projects        # 200, public
 curl -o /dev/null -w '%{http_code}\n' \
-     https://eportfolioapi.rbsuport.com/actuator/health          # 404, not public
+     https://eportfolioapi.rbsuport.com/v3/api-docs              # 404, docs are off
 ```
+
+`/actuator/health` answers 200 from the internet. Under Caddy a rule turned it away;
+Traefik has no equivalent and none was added, so the endpoint is reachable. It
+exposes `{"status":"UP"}` and nothing else — `show-details` is `never` and only the
+health endpoint is exposed — but it is public, and worth closing with a Traefik
+middleware or by moving the actuator to its own `management.server.port` when the
+routing is next touched.
 
 From the host, where the actuator is still reachable:
 
