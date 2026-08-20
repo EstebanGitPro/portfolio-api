@@ -17,6 +17,13 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Administration endpoints. Update and delete are deliberately not exposed: this API
+ * has no authentication, so an open write surface is reachable by anyone who knows the
+ * URL. Creating a project can be undone; overwriting or deleting one cannot. The use
+ * cases still exist in the core and can be published again once there is an identity
+ * to check.
+ */
 @Tag(name = "Projects (admin)", description = "Gestión de proyectos")
 @RestController
 @RequestMapping("/api/admin/projects")
@@ -60,31 +67,5 @@ public class ProjectAdminController {
     @GetMapping("/{id}")
     public ResponseEntity<ProjectResponse> getProjectById(@PathVariable String id) {
         return ResponseEntity.ok(mapper.toResponse(projectQueryUseCase.getProjectById(id)));
-    }
-
-    @Operation(summary = "Actualizar un proyecto",
-            description = "Reemplaza el proyecto completo. createdAt se preserva; updatedAt se refresca.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Proyecto actualizado"),
-            @ApiResponse(responseCode = "400", description = "Body invalido"),
-            @ApiResponse(responseCode = "404", description = "El proyecto no existe"),
-            @ApiResponse(responseCode = "409", description = "Ya existe un proyecto con ese slug")
-    })
-    @PutMapping("/{id}")
-    public ResponseEntity<ProjectResponse> updateProject(@PathVariable String id,
-                                                             @Valid @RequestBody ProjectRequest requestDTO) {
-        return ResponseEntity.ok(
-                mapper.toResponse(projectCommandUseCase.updateProject(id, mapper.toDraft(requestDTO))));
-    }
-
-    @Operation(summary = "Eliminar un proyecto")
-    @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Eliminado"),
-            @ApiResponse(responseCode = "404", description = "El proyecto no existe")
-    })
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteProject(@PathVariable String id) {
-        projectCommandUseCase.deleteProject(id);
-        return ResponseEntity.noContent().build();
     }
 }

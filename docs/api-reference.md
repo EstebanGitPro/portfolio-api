@@ -141,51 +141,17 @@ Get any project by ID (including unpublished).
 
 ---
 
-### PUT /api/admin/projects/{id}
+### Update and delete are not exposed
 
-Update an existing project. All fields are required.
+`PUT` and `DELETE` on `/api/admin/projects/{id}` used to exist and were removed on
+purpose. This API has no authentication: every endpoint below is reachable by anyone
+who knows the URL. Creating a project can be undone by hand; overwriting or deleting
+one cannot.
 
-**Request Body:**
+Both operations still exist in the application core and will be published again once
+there is an identity to check against.
 
-```json
-{
-  "title": "Mi Portfolio Web - Updated",
-  "summary": "Sitio web personal con React y Spring Boot",
-  "description": "Portfolio construido para mostrar mis proyectos como desarrollador",
-  "status": "COMPLETADO",
-  "tags": ["React", "Spring Boot", "MongoDB"],
-  "thumbnail": "https://example.com/thumb-v2.jpg",
-  "coverImage": "https://example.com/cover-v2.jpg",
-  "videoUrl": "",
-  "techStack": [
-    {"name": "Spring Boot", "reason": "Backend robusto"},
-    {"name": "MongoDB", "reason": "NoSQL flexible"},
-    {"name": "Docker", "reason": "Containerización"}
-  ],
-  "strategies": [
-    {"title": "Clean Architecture", "body": "Separación de responsabilidades"},
-    {"title": "TDD", "body": "Tests antes del código"}
-  ],
-  "learnings": ["Docker multi-stage builds", "MongoDB Atlas"],
-  "links": {"github": "https://github.com/...", "live": "https://..."},
-  "order": 1,
-  "published": true,
-  "startDate": "2025-01-01",
-  "endDate": "2025-07-01"
-}
-```
-
-**Response:** `200 OK` — updated project object
-**Error:** `404 Not Found` — `{"error": "Project not found with id: {id}"}`
-
----
-
-### DELETE /api/admin/projects/{id}
-
-Delete a project by ID.
-
-**Response:** `204 No Content`
-**Error:** `404 Not Found` — `{"error": "Project not found with id: {id}"}`
+Requests to them answer `405 Method Not Allowed`, because the path still serves `GET`.
 
 ---
 
