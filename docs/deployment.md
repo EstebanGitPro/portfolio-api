@@ -262,6 +262,13 @@ application. Both services therefore declare limits: 768m for the API, 1g for
 MongoDB. The image sizes its heap with `-XX:MaxRAMPercentage=75.0`, which only
 means something because that limit exists.
 
+## Reaching the database
+
+MongoDB publishes on the host's loopback only, so it is reachable through an SSH
+tunnel and from nowhere else. `docs/database-access.md` covers connecting with
+mongosh or Compass, auditing which ports are open to the internet, and rotating the
+password.
+
 ## Backups
 
 The data lives in the `mongo_data` volume; nothing else in the stack holds state.

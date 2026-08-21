@@ -21,6 +21,13 @@ services:
       # so the credentials themselves stay out of the container's environment.
       MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
       MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+    # The 127.0.0.1 prefix is the whole point of this line. It publishes the port on
+    # the host's loopback only, so the database is reachable through an SSH tunnel and
+    # from nowhere else. Written as "27017:27017" it would bind 0.0.0.0 and hand the
+    # database to the internet — and ufw would not stop it, because Docker writes its
+    # own iptables rules and they are evaluated first.
+    ports:
+      - "127.0.0.1:27017:27017"
     volumes:
       - /home/deployer/projects/portfolio/config/mongo_root_username:/run/secrets/mongo_root_username:ro
       - /home/deployer/projects/portfolio/config/mongo_root_password:/run/secrets/mongo_root_password:ro
