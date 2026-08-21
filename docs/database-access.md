@@ -1,34 +1,36 @@
-# Reaching the database, and keeping it unreachable for everyone else
+# Acceso a la base de datos, y cómo mantenerla inalcanzable para el resto
 
-MongoDB holds every project in the portfolio and it is the only stateful thing in
-the stack. This is how to get to it, and why getting to it takes a little effort on
-purpose.
+MongoDB guarda todos los proyectos del portfolio y es lo único con estado en el
+stack. Este documento explica cómo llegar a ella y por qué llegar cuesta un poco de
+trabajo a propósito.
 
-## The rule
+## La regla
 
-**The database is never published to the internet.** It is published on the host's
-loopback interface only:
+**La base de datos nunca se publica a internet.** Se publica únicamente en la
+interfaz de loopback del host:
 
 ```yaml
 ports:
   - "127.0.0.1:27017:27017"
 ```
 
-That prefix is the entire security boundary of this file. Written as `"27017:27017"`
-the port binds `0.0.0.0` and the database becomes reachable from anywhere.
+Ese prefijo es toda la frontera de seguridad de este archivo. Escrito como
+`"27017:27017"` el puerto se asocia a `0.0.0.0` y la base queda alcanzable desde
+cualquier parte.
 
-A closed firewall is not a defence here, and this is the part that catches people:
-**Docker writes its own iptables rules and they are evaluated before ufw's.** A
-published port is reachable even when `ufw status` swears the port is denied. The
-binding address in the compose file is what decides, not the firewall.
+Un firewall cerrado no protege aquí, y esta es la parte que sorprende: **Docker
+escribe sus propias reglas de iptables y se evalúan antes que las de ufw**. Un
+puerto publicado es alcanzable aunque `ufw status` afirme que está denegado. Lo que
+decide es la dirección de binding en el compose, no el firewall.
 
-The reason to care is not theoretical. Open MongoDB instances are swept
-continuously by bots that connect, drop the collections and leave a ransom note.
-The window between publishing a port and being found is measured in hours.
+El motivo para cuidarlo no es teórico. Las instancias de MongoDB abiertas son
+rastreadas de forma continua por bots que se conectan, borran las colecciones y
+dejan una nota de rescate. La ventana entre publicar un puerto y ser encontrado se
+mide en horas.
 
-## Option A — a shell on the server
+## Opción A — una terminal en el servidor
 
-For fixing data, this is enough and needs nothing set up:
+Para corregir datos es suficiente y no requiere configurar nada:
 
 ```bash
 docker exec -it $(docker ps -qf name=portfolio.*mongodb) mongosh \
@@ -37,7 +39,7 @@ docker exec -it $(docker ps -qf name=portfolio.*mongodb) mongosh \
   --authenticationDatabase admin portfolio-db
 ```
 
-Useful once inside:
+Comandos útiles una vez dentro:
 
 ```javascript
 db.projects.find({}, {slug: 1, title: 1, published: 1, order: 1})
@@ -45,114 +47,116 @@ db.projects.updateOne({slug: "motogo"}, {$set: {order: 2}})
 db.projects.deleteOne({slug: "typo-en-el-titulo"})
 ```
 
-This matters more than it looks: the API exposes no `PUT` and no `DELETE`, so a
-project created with a typo in its title — and therefore in its slug — can only be
-corrected here.
+Esto importa más de lo que parece: la API no expone `PUT` ni `DELETE`, así que un
+proyecto creado con un error de tipeo en el título — y por lo tanto en su slug —
+solo se puede corregir desde aquí.
 
-## Option B — Compass, through an SSH tunnel
+## Opción B — Compass, a través de un túnel SSH
 
-Compass tunnels on its own; no `ssh -L` in a separate terminal is needed.
+Compass abre el túnel por su cuenta; no hace falta mantener un `ssh -L` en otra
+terminal.
 
-**Connection string:**
+**Cadena de conexión:**
 
 ```
-mongodb://portfolio:<password>@127.0.0.1:27017/portfolio-db?authSource=admin
+mongodb://portfolio:<contraseña>@127.0.0.1:27017/portfolio-db?authSource=admin
 ```
 
 **Advanced Connection Options → Proxy/SSH → SSH with Identity File:**
 
-| Field | Value |
+| Campo | Valor |
 | --- | --- |
-| SSH Hostname | the VPS address |
+| SSH Hostname | la dirección del VPS |
 | SSH Port | `22` |
 | SSH Username | `root` |
-| Identity File | the key already used for the shell |
+| Identity File | la misma llave que se usa para la terminal |
 
-Compass opens the tunnel and resolves the MongoDB host **from the server's point of
-view**, which is why `127.0.0.1` is correct here: it means the VPS's loopback, not
-the laptop's.
+Compass abre el túnel y resuelve el host de MongoDB **desde el punto de vista del
+servidor**. Por eso `127.0.0.1` es correcto aquí: se refiere al loopback del VPS, no
+al de la máquina local.
 
-Get the password with:
+La contraseña se obtiene con:
 
 ```bash
 cat /home/deployer/projects/portfolio/config/mongo_root_password
 ```
 
-Nothing new is exposed. The traffic travels inside SSH, and the tunnel closes with
-Compass.
+No se expone nada nuevo. El tráfico viaja dentro de SSH y el túnel se cierra junto
+con Compass.
 
-### Before the loopback binding existed
+### Antes de que existiera el binding a loopback
 
-Without a published port the container is still reachable from the host by its own
-address on the Docker network:
+Sin un puerto publicado, el contenedor sigue siendo alcanzable desde el host por su
+propia dirección en la red de Docker:
 
 ```bash
 docker inspect $(docker ps -qf name=portfolio.*mongodb) \
   --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 ```
 
-That address works in the same Compass setup, but it changes every time the
-container is recreated — which is every deploy. The loopback binding exists to make
-the address stable.
+Esa dirección funciona con la misma configuración de Compass, pero cambia cada vez
+que el contenedor se recrea, es decir, en cada despliegue. El binding a loopback
+existe para que la dirección sea estable.
 
-## Auditing what is exposed
+## Auditar qué está expuesto
 
-Run this on the host whenever a stack changes. It answers one question: what can the
-internet reach?
+Conviene ejecutar esto en el host cada vez que cambia un stack. Responde una sola
+pregunta: qué puede alcanzar internet.
 
 ```bash
-echo "=== containers publishing on 0.0.0.0 (reachable from the internet) ==="
-docker ps --format '{{.Names}}\t{{.Ports}}' | grep '0.0.0.0' || echo "none"
+echo "=== contenedores publicando en 0.0.0.0 (alcanzables desde internet) ==="
+docker ps --format '{{.Names}}\t{{.Ports}}' | grep '0.0.0.0' || echo "ninguno"
 
-echo "=== everything listening, with the owning process ==="
+echo "=== todo lo que está escuchando, con su proceso ==="
 ss -tlnp
 
-echo "=== what ufw believes (it does not govern Docker) ==="
+echo "=== lo que cree ufw (no gobierna a Docker) ==="
 ufw status verbose
 ```
 
-Anything listed in the first block is open to the world. Read that list as the
-question "would I be comfortable if this were on a public web page?", because in
-effect it is.
+Todo lo que aparezca en el primer bloque está abierto al mundo. La forma de leer esa
+lista es preguntarse: *¿estaría cómodo si esto estuviera en una página web pública?*
+Porque en la práctica lo está.
 
-To confirm from the outside rather than trusting the local view, from any other
-machine:
+Para confirmarlo desde afuera en lugar de confiar en la vista local, desde cualquier
+otra máquina:
 
 ```bash
 for p in 27017 3306 8080 9443; do
-  timeout 5 bash -c "</dev/tcp/<vps-ip>/$p" 2>/dev/null \
-    && echo "$p OPEN" || echo "$p closed"
+  timeout 5 bash -c "</dev/tcp/<ip-del-vps>/$p" 2>/dev/null \
+    && echo "$p ABIERTO" || echo "$p cerrado"
 done
 ```
 
-The local view can be reassuring and wrong. This one cannot.
+La vista local tranquiliza y puede estar equivocada. Esta comprobación no.
 
-## Closing a port that should not be open
+## Cerrar un puerto que no debería estar abierto
 
-Change the binding, do not reach for the firewall:
+Se cambia el binding, no se recurre al firewall:
 
 ```yaml
 ports:
-  - "127.0.0.1:3306:3306"   # instead of "3306:3306"
+  - "127.0.0.1:3306:3306"   # en lugar de "3306:3306"
 ```
 
-Then recreate the container. The service stays reachable through an SSH tunnel for
-whoever administers it, and stops being reachable for everyone else.
+Después se recrea el contenedor. El servicio sigue siendo alcanzable por túnel SSH
+para quien lo administre, y deja de serlo para todos los demás.
 
-## Rotating the password
+## Rotar la contraseña
 
-`MONGO_INITDB_ROOT_PASSWORD_FILE` is read **only while the data volume is empty**.
-Editing the file later changes nothing: the user already exists. Rotation happens
-inside the database first, and the file is updated to match afterwards.
+`MONGO_INITDB_ROOT_PASSWORD_FILE` se lee **únicamente mientras el volumen de datos
+está vacío**. Editar el archivo después no cambia nada: el usuario ya existe. La
+rotación ocurre primero dentro de la base y el archivo se actualiza a continuación.
 
 ```javascript
-db.getSiblingDB("admin").changeUserPassword("portfolio", "<new password>")
+db.getSiblingDB("admin").changeUserPassword("portfolio", "<contraseña nueva>")
 ```
 
 ```bash
-printf '<new password>' > /home/deployer/projects/portfolio/config/mongo_root_password
-# and the same value in application-prod.yaml, then restart the API
+printf '<contraseña nueva>' > /home/deployer/projects/portfolio/config/mongo_root_password
+# y el mismo valor en application-prod.yaml; luego reiniciar la API
 ```
 
-The file and `application-prod.yaml` are two views of one credential. They drift
-apart silently, and the symptom is an authentication error with no obvious cause.
+El archivo y `application-prod.yaml` son dos vistas de una misma credencial. Se
+desincronizan en silencio, y el síntoma es un error de autenticación sin causa
+aparente.

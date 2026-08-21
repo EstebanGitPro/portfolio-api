@@ -265,9 +265,9 @@ means something because that limit exists.
 ## Reaching the database
 
 MongoDB publishes on the host's loopback only, so it is reachable through an SSH
-tunnel and from nowhere else. `docs/database-access.md` covers connecting with
-mongosh or Compass, auditing which ports are open to the internet, and rotating the
-password.
+tunnel and from nowhere else. `docs/database-access.md` (in Spanish) covers
+connecting with mongosh or Compass, auditing which ports are open to the internet,
+and rotating the password.
 
 ## Backups
 
