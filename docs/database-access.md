@@ -51,40 +51,94 @@ Esto importa más de lo que parece: la API no expone `PUT` ni `DELETE`, así que
 proyecto creado con un error de tipeo en el título — y por lo tanto en su slug —
 solo se puede corregir desde aquí.
 
+## Dos credenciales distintas
+
+Es el punto que más confusión genera. Conectarse desde Compass atraviesa **dos
+puertas**, y cada una tiene su propia llave:
+
+| Pestaña de Compass | Qué credencial pide | Cuál es |
+| --- | --- | --- |
+| **Proxy/SSH** | la del **servidor Linux** | usuario `root` y la contraseña del VPS |
+| **Authentication** | la de **MongoDB** | usuario `portfolio` y la contraseña generada |
+
+Primero SSH permite entrar a la máquina. Ya dentro, MongoDB pide las suyas. Poner la
+credencial del servidor en la pestaña de MongoDB produce
+`All configured authentication methods failed`, que suena a problema de red y no lo
+es.
+
+El usuario de MongoDB es `portfolio`, no `root`. Conviene tenerlo presente porque en
+el `docker-compose.yaml` de desarrollo el usuario **sí** es `root`: en el VPS se
+eligió otro nombre para que la credencial de la base no se pareciera a la del
+servidor.
+
+Ambos valores salen de los archivos montados:
+
+```bash
+echo
+echo "usuario: $(cat /home/deployer/projects/portfolio/config/mongo_root_username)"
+echo "clave:   $(cat /home/deployer/projects/portfolio/config/mongo_root_password)"
+echo
+```
+
+Los `echo` de los extremos no son adorno. Los archivos se escribieron **sin salto de
+línea final** —a propósito, para que MongoDB no interprete el `\n` como parte de la
+contraseña— y sin ellos el prompt de la terminal queda pegado al valor y se copia
+junto con él.
+
 ## Opción B — Compass, a través de un túnel SSH
 
 Compass abre el túnel por su cuenta; no hace falta mantener un `ssh -L` en otra
 terminal.
 
-**Cadena de conexión:**
+**Cadena de conexión, sin credenciales:**
 
 ```
-mongodb://portfolio:<contraseña>@127.0.0.1:27017/portfolio-db?authSource=admin
+mongodb://127.0.0.1:27017/portfolio-db
 ```
 
-**Advanced Connection Options → Proxy/SSH → SSH with Identity File:**
+**Advanced Connection Options → Authentication:**
+
+| Campo | Valor |
+| --- | --- |
+| Authentication Method | Username/Password |
+| Username | `portfolio` |
+| Password | la contraseña generada |
+| Authentication Database | `admin` |
+| Authentication Mechanism | Default |
+
+`admin` es correcto porque los usuarios creados por `MONGO_INITDB_ROOT_USERNAME`
+nacen siempre en esa base, no en `portfolio-db`.
+
+**Advanced Connection Options → Proxy/SSH → SSH with Password:**
 
 | Campo | Valor |
 | --- | --- |
 | SSH Hostname | la dirección del VPS |
 | SSH Port | `22` |
 | SSH Username | `root` |
-| Identity File | la misma llave que se usa para la terminal |
+| SSH Password | la contraseña del servidor |
+
+Si en lugar de contraseña se usa una llave, la opción es *SSH with Identity File* y
+hay que apuntar al archivo de la llave privada.
 
 Compass abre el túnel y resuelve el host de MongoDB **desde el punto de vista del
 servidor**. Por eso `127.0.0.1` es correcto aquí: se refiere al loopback del VPS, no
 al de la máquina local.
 
-La contraseña se obtiene con:
+### Por qué las credenciales no van en la URI
 
-```bash
-cat /home/deployer/projects/portfolio/config/mongo_root_password
-```
+Una contraseña de `openssl rand -base64` contiene `/`, `+` y `=`. En una URI la
+barra corta la sección de credenciales, y el resultado es
+`Invalid scheme, expected connection string to start with "mongodb://"` — un error
+que señala al esquema cuando el problema está en la contraseña.
+
+Puestas en la pestaña Authentication, Compass las codifica sola y el problema
+desaparece.
 
 No se expone nada nuevo. El tráfico viaja dentro de SSH y el túnel se cierra junto
 con Compass.
 
-### Antes de que existiera el binding a loopback
+### Si el binding a loopback todavía no está desplegado
 
 Sin un puerto publicado, el contenedor sigue siendo alcanzable desde el host por su
 propia dirección en la red de Docker:
@@ -94,9 +148,25 @@ docker inspect $(docker ps -qf name=portfolio.*mongodb) \
   --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 ```
 
-Esa dirección funciona con la misma configuración de Compass, pero cambia cada vez
-que el contenedor se recrea, es decir, en cada despliegue. El binding a loopback
-existe para que la dirección sea estable.
+Esa dirección funciona con la misma configuración de Compass —el túnel la resuelve
+desde el servidor— pero cambia cada vez que el contenedor se recrea, es decir, en
+cada despliegue. El binding a loopback existe para que la dirección sea estable.
+
+El puerto es `27017` en ambos casos. En desarrollo se usa `27019` porque el
+`docker-compose.yaml` local mapea `"27019:27017"`, y ese número solo existe cuando
+hay un mapeo de puertos de por medio. Hablándole a la dirección del contenedor se
+entra por dentro, donde MongoDB siempre escucha en `27017`.
+
+### Cómo leer los errores de conexión
+
+| Mensaje de Compass | Qué significa |
+| --- | --- |
+| `socket closed` | el túnel llegó al servidor y no había nadie escuchando en ese host y puerto |
+| `All configured authentication methods failed` | el túnel funciona y MongoDB respondió: las credenciales son las equivocadas |
+| `Invalid scheme...` | la URI está mal formada, casi siempre por caracteres especiales en la contraseña |
+
+La distinción importa: el primero es un problema de red, el segundo ya no. Cambiar
+de uno a otro es una señal de progreso, aunque los dos se vean como un fallo.
 
 ## Auditar qué está expuesto
 
