@@ -79,6 +79,7 @@ public class AnalyticsService implements AnalyticsTrackUseCase, AnalyticsQueryUs
                 buildDistribution(analyticsList, Analytics::getProjectSlug),
                 buildViewsByDay(analyticsList),
                 buildDistribution(analyticsList, Analytics::getCountry),
+                buildDistribution(analyticsList, Analytics::getRegion),
                 buildDistribution(analyticsList, Analytics::getDeviceType),
                 buildDistribution(analyticsList, Analytics::getOperatingSystem),
                 buildDistribution(analyticsList, Analytics::getBrowser),

@@ -19,7 +19,7 @@ public class IpGuideGeoResolver implements GeoResolver {
     @Override
     public GeoInfo resolve(String ip) {
         try {
-            if (isPrivateIp(ip)) {
+            if (PrivateIpRanges.isPrivate(ip)) {
                 return new GeoInfo("Local", null, null, null, null, null);
             }
 
@@ -28,6 +28,8 @@ public class IpGuideGeoResolver implements GeoResolver {
 
             if (response != null && response.location() != null) {
                 Location loc = response.location();
+                // region stays null on purpose: ip.guide's location object carries only
+                // city, country, timezone and coordinates. CompositeGeoResolver fills it in.
                 return new GeoInfo(
                         loc.country(), null, loc.city(),
                         loc.latitude(), loc.longitude(), loc.timezone()
@@ -38,16 +40,6 @@ public class IpGuideGeoResolver implements GeoResolver {
             log.warn("GeoIP lookup failed for ip: {}", ip, e);
             return new GeoInfo(null, null, null, null, null, null);
         }
-    }
-
-    private boolean isPrivateIp(String ip) {
-        return ip == null
-                || ip.startsWith("127.")
-                || ip.startsWith("192.168.")
-                || ip.startsWith("10.")
-                || ip.startsWith("172.")
-                || "0:0:0:0:0:0:0:1".equals(ip)
-                || "::1".equals(ip);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

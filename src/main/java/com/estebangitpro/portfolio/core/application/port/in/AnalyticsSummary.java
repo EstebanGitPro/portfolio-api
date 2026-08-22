@@ -14,6 +14,7 @@ public record AnalyticsSummary(
         Map<String, Long> viewsByProject,
         Map<String, Long> viewsByDay,
         Map<String, Long> viewsByCountry,
+        Map<String, Long> viewsByRegion,
         Map<String, Long> viewsByDevice,
         Map<String, Long> viewsByOs,
         Map<String, Long> viewsByBrowser,
