@@ -1,0 +1,39 @@
+# Production profile. Everything that differs from a laptop lives here.
+spring:
+  docker:
+    compose:
+      # The compose file is driven from the host, never from inside the container.
+      enabled: false
+
+server:
+  shutdown: graceful
+  # Caddy terminates TLS, so the app must trust X-Forwarded-* to build correct URLs.
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only health. No env, no heapdump, no mappings on a public box.
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+springdoc:
+  # Swagger is a map of the admin surface: off unless deliberately turned on.
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_UI_ENABLED:false}
+
+logging:
+  level:
+    root: INFO
+    com.estebangitpro.portfolio: INFO
