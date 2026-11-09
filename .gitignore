@@ -31,3 +31,12 @@ build/
 
 ### VS Code ###
 .vscode/
+.DS_Store
+
+### Local secrets ###
+.env
+.env.*
+!.env*.example
+
+### Apidog workspace — local only, never published ###
+portfolio_esteban/

@@ -1,0 +1,23 @@
+# The build context is copied into the image builder — keep it to sources only.
+.git
+.gitignore
+.gitattributes
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+# Local tooling and workspaces that have no business inside an image
+.idea/
+.vscode/
+.atl/
+portfolio_esteban/
+.DS_Store
+
+# Secrets never travel in a build context
+.env
+.env.*
+!.env*.example
+
+# Deployment files, read by the host and not by the build
+docker-compose*.yaml
+docs/
+HELP.md

@@ -1,0 +1,95 @@
+# Production stack for the VPS, deployed through Dokploy.
+#
+# Dokploy owns Traefik and, with it, ports 80 and 443. Nothing here publishes a
+# port: Traefik reaches the API over the dokploy-network overlay and terminates
+# TLS itself, the same way the other applications on that host already work.
+#
+# Configuration arrives as mounted files rather than environment variables, so
+# secrets can be uploaded over SFTP and never appear in a compose file, in
+# `docker inspect`, or in this repository. Upload them to /etc/portfolio on the
+# host before the first deploy, under the same /home/deployer/projects path the
+# other applications already use — see docs/deployment.md.
+
+name: portfolio
+
+services:
+  mongodb:
+    image: mongo:7.0.4
+    restart: unless-stopped
+    environment:
+      # The mongo image reads these two from files when the _FILE suffix is used,
+      # so the credentials themselves stay out of the container's environment.
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/mongo_root_username
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+    # The 127.0.0.1 prefix is the whole point of this line. It publishes the port on
+    # the host's loopback only, so the database is reachable through an SSH tunnel and
+    # from nowhere else. Written as "27017:27017" it would bind 0.0.0.0 and hand the
+    # database to the internet — and ufw would not stop it, because Docker writes its
+    # own iptables rules and they are evaluated first.
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - /home/deployer/projects/portfolio/config/mongo_root_username:/run/secrets/mongo_root_username:ro
+      - /home/deployer/projects/portfolio/config/mongo_root_password:/run/secrets/mongo_root_password:ro
+      - mongo_data:/data/db
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  portfolio-api:
+    build: .
+    image: portfolio-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    volumes:
+      # Spring reads ./config/ from the working directory with higher precedence
+      # than anything packaged in the jar, so this file carries the credentials
+      # and the CORS origins without a single secret living in the image.
+      - /home/deployer/projects/portfolio/config/application-prod.yaml:/app/config/application-prod.yaml:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - backend
+      - dokploy-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          # The host runs without swap, so an unbounded JVM competing with the
+          # databases of three other applications is somebody else's outage.
+          # -XX:MaxRAMPercentage=75 in the image sizes the heap against this.
+          memory: 768m
+    logging: *logging
+
+networks:
+  # MongoDB lives here alone with the API: internal means no route to the
+  # internet and none from it.
+  backend:
+    internal: true
+  # Created and owned by Dokploy. Traefik routes to the API across it.
+  dokploy-network:
+    external: true
+
+volumes:
+  mongo_data:

@@ -1,19 +1,21 @@
 package com.estebangitpro.portfolio.dto;
 
 import com.estebangitpro.portfolio.model.ProjectLinks;
+import com.estebangitpro.portfolio.model.ProjectStatus;
 import com.estebangitpro.portfolio.model.StrategyItem;
 import com.estebangitpro.portfolio.model.TechStackItem;
 
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
-public record ProjectResponseDTO(
+public record ProjectResponse(
         String id,
         String slug,
         String title,
         String summary,
         String description,
-        String status,
+        ProjectStatus status,
         List<String> tags,
         String thumbnail,
         String coverImage,
@@ -22,11 +24,11 @@ public record ProjectResponseDTO(
         List<StrategyItem> strategies,
         List<String> learnings,
         ProjectLinks links,
-        Integer order,
-        Boolean published,
-        Date startDate,
-        Date endDate,
-        Date createdAt,
-        Date updatedAt
+        int order,
+        boolean published,
+        LocalDate startDate,
+        LocalDate endDate,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
 ) {
 }

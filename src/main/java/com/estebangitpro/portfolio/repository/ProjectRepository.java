@@ -1,10 +1,14 @@
 package com.estebangitpro.portfolio.repository;
 
 import com.estebangitpro.portfolio.model.Project;
-import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;
+import java.util.Optional;
 
-public interface ProjectRepository extends MongoRepository<Project, String> {
-    List<Project> findByPublishedTrueOrderByOrderAsc();
+public interface ProjectRepository {
+    List<Project> findAllPublished();
+    List<Project> findAll();
+    Optional<Project> findById(String id);
+    Project save(Project project);
+    void deleteById(String id);
 }
