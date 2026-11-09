@@ -12,7 +12,7 @@ import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
 
 @Configuration
-@EnableMongoRepositories(basePackages = "com.estebangitpro.portfolio.adapter.out.persistence")
+@EnableMongoRepositories(basePackages = "com.estebangitpro.portfolio.repository")
 public class MongoConfig extends AbstractMongoClientConfiguration {
 
     // Inyectamos las variables.
