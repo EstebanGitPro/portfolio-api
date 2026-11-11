@@ -2,12 +2,14 @@ package com.estebangitpro.portfolio.dto;
 
 import com.estebangitpro.portfolio.model.ProjectLinks;
 import com.estebangitpro.portfolio.model.ProjectStatus;
+import com.estebangitpro.portfolio.model.ProjectTranslation;
 import com.estebangitpro.portfolio.model.StrategyItem;
 import com.estebangitpro.portfolio.model.TechStackItem;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public record ProjectResponse(
         String id,
@@ -28,6 +30,7 @@ public record ProjectResponse(
         boolean published,
         LocalDate startDate,
         LocalDate endDate,
+        Map<String, ProjectTranslation> translations,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

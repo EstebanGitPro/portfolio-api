@@ -47,6 +47,20 @@ db.projects.updateOne({slug: "motogo"}, {$set: {order: 2}})
 db.projects.deleteOne({slug: "typo-en-el-titulo"})
 ```
 
+Para agregar o cambiar la traducción de un proyecto que ya existe (el campo
+`translations`, ver `docs/api-reference.md`):
+
+```javascript
+db.projects.updateOne(
+  {slug: "motogo"},
+  {$set: {"translations.en": {
+    title: "MotoGo",
+    summary: "…",
+    description: "…"
+  }}}
+)
+```
+
 Esto importa más de lo que parece: la API no expone `PUT` ni `DELETE`, así que un
 proyecto creado con un error de tipeo en el título — y por lo tanto en su slug —
 solo se puede corregir desde aquí.

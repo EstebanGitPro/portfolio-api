@@ -1,6 +1,7 @@
 package com.estebangitpro.portfolio.service;
 
 import com.estebangitpro.portfolio.model.Project;
+import com.estebangitpro.portfolio.model.ProjectTranslation;
 import com.estebangitpro.portfolio.dto.ProjectDraft;
 import com.estebangitpro.portfolio.repository.ProjectRepository;
 import com.estebangitpro.portfolio.service.ProjectCommandUseCase;
@@ -11,7 +12,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -23,7 +27,8 @@ public class ProjectService implements ProjectQueryUseCase, ProjectCommandUseCas
     @Override
     public Project createProject(ProjectDraft draft) {
         LocalDateTime now = LocalDateTime.now(clock);
-        return repository.save(fromDraft(null, generateSlug(draft.title()), draft, now, now));
+        return repository.save(fromDraft(null, generateSlug(draft.title()), draft,
+                normalize(draft.translations()), now, now));
     }
 
     @Override
@@ -51,6 +56,11 @@ public class ProjectService implements ProjectQueryUseCase, ProjectCommandUseCas
                 existing.getId(),
                 generateSlug(draft.title()),
                 draft,
+                // An update that says nothing about translations keeps the stored ones:
+                // editing a project's status must not silently erase its English copy.
+                draft.translations() == null
+                        ? existing.getTranslations()
+                        : normalize(draft.translations()),
                 existing.getCreatedAt(),
                 LocalDateTime.now(clock)));
     }
@@ -63,6 +73,7 @@ public class ProjectService implements ProjectQueryUseCase, ProjectCommandUseCas
     }
 
     private Project fromDraft(String id, String slug, ProjectDraft draft,
+                              Map<String, ProjectTranslation> translations,
                               LocalDateTime createdAt, LocalDateTime updatedAt) {
         return new Project(
                 id, slug,
@@ -71,8 +82,25 @@ public class ProjectService implements ProjectQueryUseCase, ProjectCommandUseCas
                 draft.coverImage(), draft.videoUrl(), draft.techStack(),
                 draft.strategies(), draft.learnings(), draft.links(),
                 draft.order(), draft.published(), draft.startDate(),
-                draft.endDate(), createdAt, updatedAt
+                draft.endDate(), translations, createdAt, updatedAt
         );
+    }
+
+    /**
+     * Language codes are stored lowercase and trimmed so "EN", "en " and "en" are one
+     * language; entries without a code or without content are dropped.
+     */
+    private Map<String, ProjectTranslation> normalize(Map<String, ProjectTranslation> translations) {
+        if (translations == null) {
+            return Map.of();
+        }
+        Map<String, ProjectTranslation> normalized = new LinkedHashMap<>();
+        translations.forEach((language, translation) -> {
+            if (language != null && !language.isBlank() && translation != null) {
+                normalized.put(language.strip().toLowerCase(Locale.ROOT), translation);
+            }
+        });
+        return normalized;
     }
 
     private String generateSlug(String title) {

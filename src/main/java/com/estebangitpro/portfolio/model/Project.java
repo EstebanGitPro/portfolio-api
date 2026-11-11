@@ -3,6 +3,7 @@ package com.estebangitpro.portfolio.model;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public class Project {
     private final String id;
@@ -23,6 +24,8 @@ public class Project {
     private final boolean published;
     private final LocalDate startDate;
     private final LocalDate endDate;
+    /** Copy in other languages, keyed by lowercase language code ("en"). Never null. */
+    private final Map<String, ProjectTranslation> translations;
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
 
@@ -30,7 +33,9 @@ public class Project {
                    ProjectStatus status, List<String> tags, String thumbnail, String coverImage,
                    String videoUrl, List<TechStackItem> techStack, List<StrategyItem> strategies,
                    List<String> learnings, ProjectLinks links, int order, boolean published,
-                   LocalDate startDate, LocalDate endDate, LocalDateTime createdAt, LocalDateTime updatedAt) {
+                   LocalDate startDate, LocalDate endDate,
+                   Map<String, ProjectTranslation> translations,
+                   LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.slug = slug;
         this.title = title;
@@ -49,6 +54,7 @@ public class Project {
         this.published = published;
         this.startDate = startDate;
         this.endDate = endDate;
+        this.translations = translations == null ? Map.of() : Map.copyOf(translations);
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -71,6 +77,7 @@ public class Project {
     public boolean isPublished() { return published; }
     public LocalDate getStartDate() { return startDate; }
     public LocalDate getEndDate() { return endDate; }
+    public Map<String, ProjectTranslation> getTranslations() { return translations; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

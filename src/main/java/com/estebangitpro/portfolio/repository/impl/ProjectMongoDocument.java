@@ -2,6 +2,7 @@ package com.estebangitpro.portfolio.repository.impl;
 
 import com.estebangitpro.portfolio.model.ProjectLinks;
 import com.estebangitpro.portfolio.model.ProjectStatus;
+import com.estebangitpro.portfolio.model.ProjectTranslation;
 import com.estebangitpro.portfolio.model.StrategyItem;
 import com.estebangitpro.portfolio.model.TechStackItem;
 import lombok.*;
@@ -13,6 +14,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Document(value = "projects")
 @AllArgsConstructor
@@ -41,6 +43,7 @@ public class ProjectMongoDocument {
     private boolean published = true;
     private LocalDate startDate;
     private LocalDate endDate;
+    private Map<String, ProjectTranslation> translations;
     @CreatedDate
     private LocalDateTime createdAt;
     @LastModifiedDate

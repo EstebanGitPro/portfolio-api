@@ -83,7 +83,22 @@ Create a new project.
   "order": 1,
   "published": true,
   "startDate": "2025-01-01",
-  "endDate": "2025-06-01"
+  "endDate": "2025-06-01",
+  "translations": {
+    "en": {
+      "title": "My Portfolio Site",
+      "summary": "Personal website with React and Spring Boot",
+      "description": "Portfolio built to show my projects as a developer",
+      "techStack": [
+        {"name": "Spring Boot", "reason": "Robust backend"},
+        {"name": "MongoDB", "reason": "Flexible NoSQL"}
+      ],
+      "strategies": [
+        {"title": "Clean Architecture", "body": "Separation of concerns"}
+      ],
+      "learnings": ["Docker multi-stage builds"]
+    }
+  }
 }
 ```
 
@@ -175,6 +190,25 @@ Requests to them answer `405 Method Not Allowed`, because the path still serves 
 | published | boolean | No | Show in public endpoint (default: true) |
 | startDate | LocalDate | No | Format: `YYYY-MM-DD` |
 | endDate | LocalDate | No | Format: `YYYY-MM-DD` |
+| translations | Map\<String, Object\> | No | The project's copy in other languages, keyed by language code (`"en"`). See below |
+
+### Translations
+
+The top-level text fields are the project's base language (Spanish). `translations`
+holds the same copy in other languages, stored inside the project document itself, so
+unpublishing or deleting a project takes its translations with it.
+
+Each language entry accepts any subset of `title`, `summary`, `description`,
+`techStack`, `strategies` and `learnings`. Every one is optional: clients show the base
+text for whatever a translation leaves out, so a project can be translated piece by
+piece. Fields that do not depend on language (`status`, `tags`, `links`, dates, images)
+are not repeated.
+
+Language codes are stored lowercase. Both `GET /api/projects` and the admin endpoints
+return `translations` (an empty object when a project has none).
+
+Because `PUT` is not exposed, the translations of a project that already exists are
+added in the database — see `docs/database-access.md`.
 
 ---
 

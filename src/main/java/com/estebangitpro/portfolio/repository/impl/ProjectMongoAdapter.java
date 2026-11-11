@@ -73,6 +73,7 @@ public class ProjectMongoAdapter implements ProjectRepository {
                 .published(domain.isPublished())
                 .startDate(domain.getStartDate())
                 .endDate(domain.getEndDate())
+                .translations(domain.getTranslations())
                 .createdAt(domain.getCreatedAt())
                 .updatedAt(domain.getUpdatedAt())
                 .build();
@@ -86,6 +87,7 @@ public class ProjectMongoAdapter implements ProjectRepository {
                 doc.getTechStack(), doc.getStrategies(), doc.getLearnings(),
                 doc.getLinks(), doc.getOrder(), doc.isPublished(),
                 doc.getStartDate(), doc.getEndDate(),
+                doc.getTranslations(),
                 doc.getCreatedAt(), doc.getUpdatedAt()
         );
     }
